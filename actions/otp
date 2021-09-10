@@ -1,0 +1,30 @@
+#!/bin/sh
+
+dmenu () {
+    /usr/bin/dmenu \
+        -nb '#333333' \
+        -nf '#ffffff' \
+        -sf '#ffffff' \
+        -sb '#405060' \
+        -fn '-xos4-terminesspowerline-medium-*-*--18-*-*-*-*-*-iso10646-*' \
+        -l 20
+}
+
+pass_find () {
+    cd ~/.password-store
+    find . \
+        -regextype posix-awk \
+        -regex ".*gpg$" \
+        -type f \
+    | sed -e 's:\.gpg$::' -e 's:\.\/::'
+}
+
+key=$(pass_find | dmenu)
+res=$(pass otp -c $key 2>&1)
+
+if [ $? -eq 0 ]; then
+    notify-send -i emblem-default.png  "OTP" "$key copied"
+else
+    notify-send -i emblem-important.png "OTP" "$res"
+fi
+

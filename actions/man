@@ -1,0 +1,4 @@
+#!/bin/sh
+#urxvtc -tn rxvt-256color -T "man $1" -e man "$1" &
+urxvtc -T "man $1" -e man "$1" &
+

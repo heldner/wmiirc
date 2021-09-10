@@ -1,0 +1,73 @@
+#!/bin/sh
+
+export TERM=rxvt
+IFS=$'\n'
+VIDEO_HOME="${HOME}/Videos"
+
+if [ "$1" = "-m" ]; then
+    player_options="-vf=flip,mirror"
+fi
+alias player="/usr/bin/mpv $player_options"
+
+dmenu () {
+    /usr/bin/dmenu \
+        -nb '#222222' \
+        -nf '#ffffff' \
+        -sf '#ffffff' \
+        -sb '#405060' \
+        -fn '-xos4-terminus-medium-*-*--18-*-*-*-*-*-iso10646-*' \
+        -l 20
+}
+
+all_videos () {
+    pattern='.*(avi|mp4|mkv|webm|m4v)$'
+
+    find -L "$VIDEO_HOME" \
+        -type f \
+        -regextype posix-extended \
+        -regex "$pattern" \
+        -printf "%f\n"
+}
+
+choose_file () {
+    all_videos \
+        | sort -h \
+        | dmenu
+}
+
+full_path () {
+    file="$1"
+
+    find -L "$VIDEO_HOME" \
+        -regextype posix-extended \
+        -name "$file" \
+        -printf "${VIDEO_HOME}/%P\n"
+}
+
+mpd_switch () {
+    state="$1"
+
+    if [ "$state" = "paused" ]; then
+        mpc -q play
+        return
+    elif [ "$(mpc | awk 'NR==2 {print $1}')" = "[playing]" ]; then
+        mpc -q pause
+        echo paused
+    fi
+}
+
+start_video () {
+    file="$1"
+    mpd_status=$(mpd_switch)
+
+    powerled off
+    wmiir xwrite /ctl view vid
+    player "$file"
+    mpd_switch $mpd_status
+    powerled on
+}
+
+file_name="$(choose_file)"
+if [ -n "$file_name" ]; then
+    start_video "$(full_path "$file_name")"
+fi

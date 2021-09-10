@@ -1,0 +1,24 @@
+#!/usr/bin/zsh
+
+. ~/.zsh_aliases
+
+dmenu () {
+    /usr/bin/dmenu \
+        -nb '#333333' \
+        -nf '#ffffff' \
+        -sf '#ffffff' \
+        -sb '#405060' \
+        -fn '-xos4-terminus-medium-*-*--18-*-*-*-*-*-iso10646-*' \
+        -l 20
+}
+
+file=~
+while [ ! -f "$file" ]; do
+    newfile="$(ls -1 --color=none "$@" "$file" | dmenu )"
+    if [ -z "$newfile" ]; then
+        exit;
+    fi
+    file="$(readlink -f "$file/$newfile")"
+done
+exec xdg-open "$file"
+

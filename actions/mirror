@@ -1,0 +1,3 @@
+#mpv --really-quiet --cache 128 --tv-driver=v4l2:width=1024:height=768 --vf=mirror --vo=xv tv://
+#mplayer --cache 128 --tv-driver=v4l2:width=1024:height=768 --vf=mirror --vo=xv tv://
+mplayer tv:// -tv driver=v4l2:width=640:height=480:device=/dev/video0

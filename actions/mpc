@@ -1,0 +1,30 @@
+#!/bin/sh
+
+mpc="/usr/bin/mpc "
+notify_icon=/tmp/music_icon.png
+track_path="$(mpc -f '%file%' \
+    | awk -F'/' 'NR==1 {for (i=1; i<=(NF-1); i++) printf $i"/"}')"
+
+notify_title() {
+  $mpc | head -1
+}
+
+get_music_pic () {
+    music_dir="$HOME/Music"
+    music_picture=$(find "${music_dir}/${track_path}" \
+        -maxdepth 2 \
+        -type f \
+        -regextype sed \
+        -regex '.*\.\(jpg\|png\|jpeg\)$' \
+        -print \
+        -quit)
+    if [ -n "$music_picture" ]; then
+        convert "$music_picture" -scale 256x256 "$notify_icon"
+    fi
+}
+
+if ! echo "$track_path" | grep -q 'http:'; then
+    get_music_pic
+fi
+
+notify-send -i "$notify_icon" "<b>Now playing</b>" "$(notify_title)"

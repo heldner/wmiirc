@@ -1,0 +1,59 @@
+#!/usr/bin/env ruby
+
+
+NORMCOLORS = '#888888 #222222 #333333'
+FOCUSCOLORS = '#ffffff #405060 #506070'
+#SOCKET = '/tmp/ns.skor.:0/wmiifs/rbar/vol'
+RETRY_PERIOD = 5
+
+
+def subscribe_pactl
+  while true
+    IO.popen('pactl subscribe').each_line do |line|
+      if line.match(/Event 'change' on sink /)
+        update_vol
+      end
+    end
+    sleep RETRY_PERIOD
+  end
+end
+
+def amixer_state
+
+  amixer_state = `amixer get Master`
+  state = ''
+  volume = ''
+
+  amixer_state.each_line do |line|
+    if line.match(/(\[(on|off)\])/) and state.empty?
+      split_line = line.split(/\[|\]/)
+      state = split_line[-2]
+      volume = split_line[-4].gsub("%","")
+    end
+  end
+
+  return state, volume
+
+end
+
+
+def update_vol
+
+  state, volume = amixer_state
+
+  case state
+  when 'off'
+    colors = FOCUSCOLORS
+  else
+    colors = NORMCOLORS
+  end
+
+  wmii_line = "colors #{colors}\nlabel vol #{volume}"
+  `wmiir xwrite /rbar/vol "#{wmii_line}"`
+
+end
+
+if __FILE__ == $0
+  update_vol
+  subscribe_pactl
+end

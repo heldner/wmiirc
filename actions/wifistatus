@@ -1,0 +1,20 @@
+#!/bin/sh
+
+show () {
+  iwctl station wlan0 show |
+    awk '{
+      if ($1 ~ /State/) print "export STATUS="$2;
+      if ($0 ~ /Connected network/) print "export NETWORK="$3;
+    }'
+}
+
+status_msg () {
+  eval "$(show)"
+  msg="status: $STATUS"
+  if [ -n "$NETWORK" ]; then
+    msg="$msg\\nnetwork: $NETWORK"
+  fi
+  echo "$msg"
+}
+
+status_msg

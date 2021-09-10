@@ -1,0 +1,32 @@
+#!/usr/bin/env ruby
+
+require 'yaml'
+
+CRED = ENV['HOME'] + '/cred.yaml'
+HOSTS = YAML::load_file("#{CRED}")
+
+`xrandr`.each_line do |line|
+  if line.match(/ connected /)
+    SCREEN_SIZE = line.split(/\s|\+/)[2]
+    break
+  end
+end
+
+hosts = HOSTS.map do |ip,creds|
+  ip
+end
+hosts = hosts.dup.join("\n")
+host = `echo "#{hosts}" | wimenu -p host:`
+request_host = host
+verbose      = ARGV[1]
+host=HOSTS[request_host]
+if host and host.any?
+  user = host['user']
+  pass = host['pass']
+  p user,pass if verbose
+else
+  raise "Unknown host"
+end
+cmd="rdesktop -f -u '#{user}' -p '#{pass}' #{request_host} -g #{SCREEN_SIZE}"
+p cmd if verbose
+exec(cmd)

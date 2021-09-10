@@ -1,0 +1,49 @@
+#!/usr/bin/env ruby
+
+NORMCOLORS = '#888888 #222222 #333333'
+FOCUSCOLORS = '#ffffff #405060 #506070'
+MPC_REGEX = /player/
+
+def subscribe_mpd
+  IO.popen('mpc idleloop').each_line do |line|
+    if line.match(MPC_REGEX)
+      update_mpd_status
+    end
+  end
+end
+
+def mpd_status
+  status = `mpc \
+    --host #{ENV['MPD_HOST']} \
+    --format "[[%artist% - ]%title%]|[%file%]"`.split("\n")
+  current_play = status[0]
+  state = status[1].split(/\[|\]/)[1]
+  return current_play, state
+rescue
+  return 'empty', 'stopped'
+end
+
+def update_mpd_status
+  current_song, state = mpd_status
+  if state == 'paused'
+    current_song = "|| #{current_song}"
+  end
+  wmii_xwrite('mpd', current_song)
+end
+
+def wmii_xwrite(bar, string, focus_colors = false)
+  case focus_colors
+  when true
+    colors = FOCUSCOLORS
+  else
+    colors = NORMCOLORS
+  end
+
+  wmii_line = "colors #{colors}\nlabel #{string}"
+  `wmiir xwrite /rbar/#{bar} "#{wmii_line}"`
+end
+
+update_mpd_status
+while true
+  subscribe_mpd
+end

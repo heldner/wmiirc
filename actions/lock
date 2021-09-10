@@ -1,0 +1,63 @@
+#!/bin/sh
+
+background=~/Pictures/shots/lock.png
+
+take_screenshot () {
+    maim /tmp/lock.png
+    convert -blur 5x3 /tmp/lock.png $background
+    rm /tmp/lock.png
+}
+
+clean_bg () {
+    rm $background
+}
+
+i3lock_std () {
+    take_screenshot
+    i3lock -c 000000 -i $background
+    clean_bg
+}
+
+i3lock_color () {
+    BLANK='#00000000'  # blank
+    CLEAR='#ffffff22'  # clear ish
+    DEFAULT='#888888ff'  # default
+    TEXT='#405060ff'  # text
+    WRONG='#880000bb'  # wrong
+    VERIFYING='#506070ff'  # verifying
+
+    i3lock                        \
+        --nofork                  \
+        --insidevercolor=$CLEAR   \
+        --ringvercolor=$VERIFYING \
+        --insidewrongcolor=$CLEAR \
+        --ringwrongcolor=$WRONG   \
+        --insidecolor=$BLANK      \
+        --ringcolor=$DEFAULT      \
+        --linecolor=$BLANK        \
+        --separatorcolor=$DEFAULT \
+        --textcolor=$TEXT         \
+        --timecolor=$TEXT         \
+        --datecolor=$TEXT         \
+        --keyhlcolor=$WRONG       \
+        --bshlcolor=$WRONG        \
+        --screen=0                \
+        --blur=5                  \
+        --clock                   \
+        --timestr="%H:%M:%S"      \
+        --datestr="%A,%d-%m-%Y"
+}
+
+lock () {
+    random=$(shuf -i 1-100 -n 1)
+    if [ "$random" -le 50 ]; then
+        i3lock_std
+    elif [ "$random" -gt 50 ];then
+        slock
+    fi
+}
+
+xset dpms 60 60 60
+pgrep -f 'i3lock|slock' || i3lock_std
+xset dpms 600 600 600
+

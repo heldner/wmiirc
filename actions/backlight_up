@@ -1,0 +1,27 @@
+#!/bin/bash
+
+lock="/var/$(basename "$0").lock"
+control_file="/sys/class/backlight/intel_backlight/brightness"
+step='150'
+
+fetch_value () {
+  cat $control_file
+}
+
+decrease () {
+  curr="$1"
+  echo $(( $curr - $step ))
+}
+
+increase () {
+  curr="$1"
+  echo $(( $curr + $step ))
+}
+
+update_bright () {
+  curr_val=$(fetch_value)
+  new_val="$(increase $curr_val)" 
+  echo "$new_val" |sudo tee "$control_file"
+}
+
+update_bright

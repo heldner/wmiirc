@@ -1,0 +1,5 @@
+CTEMP="CPU Temp: `sensors | awk '/Core 0/ {print substr($3,2)}'`"
+#GTEMP="GPU Temp: `nvidia-settings -q=GPUCoreTemp | awk '/Attribute/ {print substr($NF,0,2)}'`°C"
+MESSAGE="$CTEMP"
+
+wmiir xwrite /event Notice $MESSAGE

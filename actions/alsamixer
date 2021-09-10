@@ -1,0 +1,4 @@
+wmiir xwrite /ctl view vol
+if ! pgrep -u $USER alsamixer > /dev/null; then
+    wmiir setsid urxvtc -e alsamixer &
+fi

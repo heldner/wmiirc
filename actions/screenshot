@@ -1,0 +1,29 @@
+#!/bin/sh
+
+name=$(date +"%Y-%m-%d-%H-%M-%S.png")
+picpath=~/Pictures/shots/$name
+args="$*"
+
+ask_upload () {
+    echo 'yes\nno' \
+        | rofi \
+        -lines 2 \
+        -width 20 \
+        -hide-scrollbar true \
+        -dmenu -mesg 'Upload image to imgur?'
+}
+
+upload_imgur () {
+    imgur.sh $picpath \
+        | xclip -selection clipboard
+}
+
+flameshot gui
+exit 0
+if [ "$args" = "-s" ]; then
+    maim -s --hidecursor $picpath
+else
+    maim $* $picpath
+fi
+
+#[ "$(ask_upload)" = 'yes' ] && upload_imgur &

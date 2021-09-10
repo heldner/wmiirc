@@ -1,0 +1,35 @@
+#!/bin/sh
+
+[ -n "$1" ] && PASS="$1"
+
+dmenu () {
+    /usr/bin/dmenu \
+        -nb '#333333' \
+        -nf '#ffffff' \
+        -sf '#ffffff' \
+        -sb '#405060' \
+        -fn '-xos4-terminesspowerline-medium-*-*--18-*-*-*-*-*-iso10646-*' \
+        -l 20
+}
+
+pass_find () {
+    cd "${HOME}/.password-store" && \
+    find . \
+        -regextype posix-awk \
+        -regex ".*gpg$" \
+        -type f \
+    | sed -e 's:\.gpg$::' -e 's:\.\/::'
+}
+
+if [ -n "$PASS" ]; then \
+  key="$PASS"
+else
+  key=$(pass_find | dmenu)
+fi
+
+if res=$(pass -c "$key" 2>&1); then
+    notify-send -i emblem-default.png  "OTP" "$key copied"
+else
+    notify-send -i emblem-important.png "OTP" "$res"
+fi
+

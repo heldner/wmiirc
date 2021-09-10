@@ -1,0 +1,150 @@
+#!/bin/sh
+
+# proxy host
+TUNNEL_HOST=''
+# whitespace separated networks
+REMOTE_NETS='10.6.10.0/24'
+# remote port
+PORT='22'
+# root key
+SSH_KEY="${HOME}/.ssh/main_root"
+# unique local ip address of tunnel device
+MYIP='10.224.0.200'
+# unique remote ip address of tunnel device
+PEERIP='10.224.0.100'
+# unique tunnel number
+TUNNUM=24
+
+if [ ! -z "$DEBUG" ]; then
+    set -x
+    SSH_LOGLEVEL="-o LogLevel=VERBOSE"
+fi
+
+
+TUNNAME=tun${TUNNUM}
+MIN_SSH_OPTS="$SSH_LOGLEVEL
+    -o IdentityFile=$SSH_KEY
+    -o Port=$PORT
+    -o GSSAPIAuthentication=no
+    -o Compression=yes
+    -o LogLevel=QUIET
+    -o User=root
+    -o UserKnownHostsFile=/dev/null
+    -o StrictHostKeyChecking=no
+    $TUNNEL_HOST"
+SSH_OPTS="$MIN_SSH_OPTS
+    -o Tunnel=yes
+    -o ExitOnForwardFailure=yes
+    -o TunnelDevice=${TUNNUM}:${TUNNUM}
+    -o ServerAliveInterval=60"
+
+export AUTOSSH_LOGLEVEL=6
+export AUTOSSH_POLL=30
+export AUTOSSH_FIRST_POLL=60
+export AUTOSSH_MAXSTART=140
+export AUTOSSH_LOGFILE=/var/log/autossh-${TUNNEL_HOST}.log
+
+usage () {
+    echo "Usage: $(basename $0) <up|down|switch|status>"
+    exit
+}
+
+set_ssh_cmd () {
+    if [ -x "$(which autossh)" ]; then
+        echo 'autossh -M 0'
+    else
+        echo 'ssh'
+    fi
+}
+
+up_remote_tun () {
+    local_ip=$PEERIP
+    remote_ip=$MYIP
+    sudo $(set_ssh_cmd) -f -TN $SSH_OPTS
+    ssh $MIN_SSH_OPTS "sudo sh -s" <<EOF
+ip tuntap add dev $TUNNAME mode tun
+ip link set $TUNNAME up
+ip addr add ${local_ip}/32 peer $remote_ip dev $TUNNAME
+if ! iptables-save -t nat | grep -q '${remote_ip}/32 -j MASQUERADE'; then
+    iptables -t nat -A POSTROUTING -s ${remote_ip}/32 -j MASQUERADE
+fi
+EOF
+}
+
+up_local_tun () {
+    sudo ip tuntap add dev $TUNNAME mode tun
+    sudo ip link set $TUNNAME up
+    sudo ip addr add ${MYIP}/32 peer $PEERIP dev $TUNNAME
+    for net in $REMOTE_NETS; do
+        sudo ip route add $net dev $TUNNAME
+    done
+}
+
+down_local_tun () {
+    echo "clean local tunnel device"
+    sudo ip link delete dev $TUNNAME
+}
+
+down_remote_tun () {
+    echo "clean remote tunnel device, cleanup iptables"
+    ssh $MIN_SSH_OPTS "
+        sudo ip link delete $TUNNAME
+        sudo iptables -t nat -D POSTROUTING -s ${MYIP}/32 -j MASQUERADE"
+}
+
+if_up () {
+    if ssh_check; then
+        echo "tunnel already running"
+        usage
+    else
+        up_remote_tun
+        up_local_tun
+        status
+    fi
+}
+
+if_down () {
+    # twice kill need for autossh
+    echo "clean local ssh client"
+    sudo pkill -QUIT -f "$(set_ssh_cmd).*${TUNNEL_HOST}.*TunnelDevice.*"
+    sudo pkill -TERM -f "$(set_ssh_cmd).*${TUNNEL_HOST}.*TunnelDevice.*"
+    down_local_tun
+    down_remote_tun
+}
+
+ssh_check () {
+    if pgrep -f "$(set_ssh_cmd).*${TUNNEL_HOST}.*TunnelDevice.*" >/dev/null; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+status () {
+    if ip link show $TUNNAME 2>&1; then
+        ping $PEERIP -c 1
+    fi
+}
+
+switch () {
+    if ssh_check; then
+        if_down
+        echo "tunnel down"
+    else
+        if_up
+        echo "tunnel up"
+    fi
+}
+
+case $1 in
+    down)
+        if_down ;;
+    up)
+        if_up ;;
+    switch)
+        switch ;;
+    status)
+        status ;;
+    *)
+        usage ;;
+esac

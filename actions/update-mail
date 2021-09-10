@@ -1,0 +1,11 @@
+#!/bin/sh
+
+USER=dayton
+export HOME=/home/$USER
+MBSYNC=/usr/bin/mbsync
+
+if [ -d /run/user/1000 ]; then
+    $MBSYNC -a > /dev/null 2>&1
+fi
+
+exit 0

@@ -1,0 +1,10 @@
+#!/bin/sh
+terminal() {
+    wmiir setsid urxvtc "$@"
+}
+
+weather () {
+    terminal -hold -e curl -L https://wttr.in/rostov-on-don
+}
+
+weather

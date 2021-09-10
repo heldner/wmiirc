@@ -1,0 +1,5 @@
+if ! pgrep -u $USER ncmpcpp > /dev/null; then
+    wmiir setsid urxvt -e ncmpcpp &
+fi
+
+wmiir xwrite /ctl view mpd

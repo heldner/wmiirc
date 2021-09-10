@@ -1,0 +1,580 @@
+#!/bin/sh -f
+#
+# By Ben Smith
+# bensmith87@gmail.com
+# original: https://pastebin.com/Xyn0mEjr
+#
+# Modified wmiirc from User Guide
+# for wmii 3.10
+#
+# How to setup
+# * Setup the actiondir to point to a directory that contains executable scripts for things you want to do
+# * Change the terminal() function to call your faviourite emulator
+# * Add any programs to the tagrules that you use
+# * Install mpd and mpc, or remove mpd function, loop and key events from this script
+# * Install alsa-utils
+# * zclockbar - go utility for clock bar updates
+# * volume_update - ruby utility for pulse audio volume updates
+#
+# How to use
+# * Mod-Enter      - new terminal
+# * Mod-p          - programs list
+# * Mod-a          - actions menu
+# * Mod-t          - change to different tag
+# * Mod-Shift-t    - move client to different tag
+# * Mod-[0-9]      - move to the nth tag
+# * Click on client head
+#   * Right click
+#     * Delete         - delete client
+#     * Remove         - remove client from view
+#     * Kill           - kill client
+#   * Scroll           - select client above or below in column
+# * Click tag      - swap to this view
+# * Click mail widget
+#   * Left mouse     - Open xterm with mutt
+# * Click mpd widget
+#   * Left mouse     - toggle play pause
+#   * Right click    - open ncmpcpp
+#   * Scroll         - change song
+# * Click vol widget
+#   * Left click     - toggle mute
+#   * Right click    - open alsamixer
+#   * Scroll         - change volume
+# * Click clock
+#   * Left click     - show calendar
+
+up=k
+down=j
+left=h
+right=l
+modkey=Mod4
+alt=Mod1
+
+normcolors='#888888 #222222 #333333'
+focuscolors='#ffffff #405060 #506070'
+font='xft:URW Gothic L:size=11'
+actiondir="${HOME}/.wmii/actions"
+startview=msg
+maildir=${HOME}/Mail/
+#BATTERY_PATH=/sys/class/power_supply/BAT0
+BATTERY_PATH=/sys/devices/platform/smapi/BAT0
+WMII_NORMCOLORS=$normcolors
+WMII_FOCUSCOLORS=$focuscolors
+
+# used by mpc
+export MPD_HOST="/run/user/1000/mpd.socket"
+
+# Create initial view
+echo "colors $focuscolors\nlabel $startview" \
+    | wmiir create /lbar/$startview
+wmiir xwrite /ctl view $startview
+
+# Configure wmii
+wmiir write /ctl <<!
+focuscolors $focuscolors
+normcolors $normcolors
+grabmod $modkey
+border 1
+font $font
+view $startview
+!
+
+# Column rules
+wmiir write /colrules <<!
+/msg/ -> 70+30
+/.*/ -> 50+50
+!
+
+# Tag rules
+# Tagging Rules
+wmiir write /rules <<!
+# Apps with system tray icons like to their main windows
+# Give them permission.
+/^Pidgin:/ allow=+activate
+/CoolReader/ tags=book
+/.*slack.*/ tags=slack
+/telegram/ floating=off fullscreen=off tags=tlg
+
+# MPlayer and VLC don't float by default, but should.
+/MPlayer|VLC/ floating=on tags=vid fullscreen=on
+
+# ROX puts all of its windows in the same group, so they open
+# with the same tags.  Disable grouping for ROX Filer.
+/^ROX-Filer:/ group=0
+/xclock.*/ floating=on
+/ncal.*/ floating=on
+/Discord/ tags=dscrd
+!
+
+# load profile
+. ${HOME}/.profile
+
+# usefull functions
+proglist() {
+    IFS=: set -- $1
+    find $@ -maxdepth 1 ! -type d -perm /111 -printf "%f\n" | sort -u
+    unset IFS
+}
+
+terminal() {
+    wmiir setsid urxvtc "$@"
+}
+
+clickmenu() {
+    if res=$(wmii9menu -- "$@"); then
+        eval "$res";
+    fi
+}
+
+read_tags() {
+    wmiir ls /tag | sed '\,^sel/$,d;s,/,,'
+}
+
+next_tag() {
+    awk -v curtag=$(wmiir read /tag/sel/ctl | head -n 1) '
+        NR==1 {first = $0}
+        $0==curtag {if (getline) print $0; else print first; exit}'
+}
+
+calendar() {
+    terminal -geometry 56x10 -hold -e ncal -3 -M &
+}
+
+# Create the notice bar
+echo label | wmiir create /rbar/!notice
+
+# Right bar widgets
+
+## Clock
+# Create the widget
+echo label | wmiir create /rbar/zclock
+pkill -f ".*\.wmii/zclockbar"
+${HOME}/.wmii/zclockbar &
+
+## Battary
+batt() {
+    design_cap=$(cat ${BATTERY_PATH}/design_capacity)
+    last_cap=$(cat ${BATTERY_PATH}/last_full_capacity)
+    curr_cap=$(cat ${BATTERY_PATH}/remaining_capacity)
+    charged=$(echo "${curr_cap}.0/${last_cap}*100" | bc -l | cut -c 1-5)
+    capacity=$(echo "${last_cap}.0/${design_cap}*100" | bc -l | cut -c 1-5)
+    printf "charged: %s capacity: %s state: %s\n" \
+        $charged \
+        $capacity \
+        $(cat ${BATTERY_PATH}/state)
+}
+
+while true; do
+    if ls "$BATTERY_PATH" > /dev/null 2>&1 ; then
+        echo label $(cat /sys/class/power_supply/BAT0/capacity) \
+            | wmiir create /rbar/zbatt
+    else
+        wmiir ls /rbar/zbatt && wmiir remove /rbar/zbatt
+    fi
+    sleep 60
+done &
+
+## MPD
+echo label | wmiir create /rbar/mpd
+pkill -f ".*\.wmii/mpd_update"
+${HOME}/.wmii/mpd_update &
+
+## Volume
+vol() {
+    default_sink=$(pactl info | awk '/Default Sink:/ {print $3}')
+    state=$(amixer get Master | awk 'END {gsub(/(\[|])/,""); print $NF}')
+    case "$state" in
+        off)
+            colors=$focuscolors ;;
+        on)
+            colors=$normcolors ;;
+    esac
+    volume=$(pactl list sinks \
+        | awk '/'${default_sink}'/ {for(i=1; i<=7; i++) {getline; if ($0 ~ /Volume/) print $5}}')
+    echo "colors $colors\nlabel vol $volume" \
+        | wmiir write /rbar/vol
+}
+
+vol_amixer() {
+    state=$(amixer get Master | awk 'END {gsub(/(\[|])/,""); print $NF}')
+    case "$state" in
+        off)
+            colors=$focuscolors ;;
+        on)
+            colors=$normcolors ;;
+    esac
+    volume=$(amixer -c 0 get Master playback \
+        | awk 'END {gsub(/(%|]|\[)/,"",$4); printf"%d\n", $4}')
+    echo "colors $colors\nlabel vol $volume" \
+        | wmiir write /rbar/vol
+}
+
+volup() {
+    pactl set-sink-volume @DEFAULT_SINK@ +1%
+}
+
+voldown() {
+    pactl set-sink-volume @DEFAULT_SINK@ -1%
+}
+
+vol_toggle() {
+    pactl set-sink-mute @DEFAULT_SINK@ toggle
+}
+echo label | wmiir create /rbar/vol
+pkill -f ".*\.wmii/volume_update"
+${HOME}/.wmii/volume_update &
+
+## Mail
+mail_watcher () {
+    inotifywait \
+        --quiet \
+        --recursive $maildir \
+        --event create \
+        --event delete \
+        --event move \
+        --timefmt "%Y%m%d-%H:%M:%S" \
+        --format "%T %e %f " \
+        --exclude ".*mbsyncstate.*|.*tmp.*|.*drafts.*" >&-
+}
+
+mail_notifier () {
+    unread=$(find $maildir -type f -regex ".*/new/.*" \
+        |awk '{s++$1} END {print s}')
+    if [ -z $unread ]; then
+        wmiir remove /rbar/mail 2>&-
+    else
+        echo "colors $focuscolors\nlabel $unread" | wmiir create /rbar/mail
+    fi
+}
+while mail_notifier; do
+    mail_watcher
+    if readlink -e "$maildir"; then
+        sleep 0.5
+    else
+        sleep 60
+    fi
+done &
+
+# Clean up action
+clean_up_and_exit () {
+    date "+%T exit wmii"
+    session=$(loginctl session-status | awk 'NR==1 {print $1}')
+    loginctl terminate-session $session
+    #wmiir xwrite /ctl quit
+}
+
+# Bind keys
+{
+cat <<!
+$modkey-$left
+$modkey-$right
+$modkey-$up
+$modkey-$down
+$modkey-space
+$modkey-Shift-$left
+$modkey-Shift-$right
+$modkey-Shift-$up
+$modkey-Shift-$down
+$modkey-Shift-space
+$modkey-d
+$modkey-s
+$modkey-m
+$modkey-Shift-c
+$modkey-f
+$modkey-Return
+$modkey-p
+$modkey-a
+$modkey-t
+$modkey-Shift-t
+$modkey-Shift-s
+$modkey-Shift-m
+$modkey-comma
+$modkey-period
+$modkey-Shift-Left
+$modkey-Shift-Right
+$modkey-Shift-Up
+$modkey-Shift-Down
+XF86AudioRaiseVolume
+XF86AudioLowerVolume
+XF86Launch1
+XF86Launch2
+XF86AudioNext
+XF86AudioPrev
+XF86AudioPlay
+XF86AudioStop
+XF86AudioMute
+XF86AudioMicMute
+XF86MonBrightnessDown
+XF86MonBrightnessUp
+XF86WLAN
+XF86ScreenSaver
+XF86TouchpadToggle
+XF86Display
+XF86Suspend
+XF86Battery
+XF86HomePage
+XF86Mail
+Print
+$alt-Print
+!
+for i in 1 2 3 4 5 6 7 8 9 0; do
+    echo $modkey-$i
+    echo $modkey-Shift-$i
+done
+} | wmiir write /keys
+
+# Broadcast a custom event
+#wmiir xwrite /event Start wmiirc
+
+# Open /event for reading
+wmiir read /event |
+# Read the events line by line
+while read line; do
+    set -- $line
+    event=$1; shift
+    line="$(echo $line | sed 's/^[^ ]* //' | tr -d '\n')"
+
+#   echo ---------------------------------
+#   echo event: $event
+#   echo param1: $1
+#   echo param2: $2
+#   echo ---------------------------------
+
+    # Process the event
+    case $event in
+
+    Quit)              # Quit when a new instance starts
+        clean_up_and_exit ;;
+    Start)              # Quit when a new instance starts
+        [ $1 = wmiirc ] && exit;;
+
+    CreateTag)          # CreateTag <Tag Name>
+        echo label $1 | wmiir create /lbar/$1;;
+        #echo $normcolors $1 | wmiir create /lbar/$1;;
+    DestroyTag)         # DestroyTag <Tag Name>
+        wmiir rm /lbar/$1;;
+    FocusTag)           # FocusTag <Tag Name>
+        wmiir xwrite /lbar/$1 colors $focuscolors;;
+    UnfocusTag)         # UnfocusTag <Tag Name>
+        wmiir xwrite /lbar/$1 colors $normcolors;;
+
+    Notice)
+        echo "colors $focuscolors\nlabel $line" | wmiir write /rbar/!notice
+        kill $xpid 2>&-
+        {
+            sleep 5;
+            echo "colors $normcolors\nlabel" | wmiir write /rbar/!notice;
+        } &
+        xpid=$!;;
+
+    UrgentTag)          # UrgentTag <'Client' or 'Manager'> <Tag Name>
+        wmiir xwrite /lbar/$2 "*$2";;
+    NotUrgentTag)           # NotUrgentTag <'Client' or 'Manager'> <TagName>
+        wmiir xwrite /lbar/$2 $2;;
+
+    # Key Events
+    Key)                # Key <Key Name>
+        case $1 in
+        # Motion keys
+        $modkey-$left)
+            wmiir xwrite /tag/sel/ctl select left;;
+        $modkey-$right)
+            wmiir xwrite /tag/sel/ctl select right;;
+        $modkey-$up)
+            wmiir xwrite /tag/sel/ctl select up;;
+        $modkey-$down)
+            wmiir xwrite /tag/sel/ctl select down;;
+        $modkey-space)
+            wmiir xwrite /tag/sel/ctl select toggle;;
+
+        # Client movement
+        $modkey-Shift-$left)
+            wmiir xwrite /tag/sel/ctl send sel left;;
+        $modkey-Shift-$right)
+            wmiir xwrite /tag/sel/ctl send sel right;;
+        $modkey-Shift-$up)
+            wmiir xwrite /tag/sel/ctl send sel up;;
+        $modkey-Shift-$down)
+            wmiir xwrite /tag/sel/ctl send sel down;;
+        $modkey-Shift-space)
+            wmiir xwrite /tag/sel/ctl send sel toggle;;
+
+        # Resize client
+        $modkey-Shift-Left)
+            wmiir xwrite /tag/sel/ctl grow sel sel left;;
+        $modkey-Shift-Right)
+            wmiir xwrite /tag/sel/ctl grow sel sel right;;
+        $modkey-Shift-Up)
+            wmiir xwrite /tag/sel/ctl grow sel sel up;;
+        $modkey-Shift-Down)
+            wmiir xwrite /tag/sel/ctl grow sel sel down;;
+
+        # Column Mode
+        $modkey-d)
+            wmiir xwrite /tag/sel/ctl colmode sel default-max;;
+        $modkey-s)
+            wmiir xwrite /tag/sel/ctl colmode sel stack-max;;
+        $modkey-m)
+            wmiir xwrite /tag/sel/ctl colmode sel stack+max;;
+
+        # Client Commands
+        $modkey-Shift-c)
+            wmiir xwrite /client/sel/ctl kill;;
+        $modkey-f)
+            wmiir xwrite /client/sel/ctl Fullscreen toggle;;
+        $modkey-Shift-s)
+            ${actiondir}/ssh;;
+        $modkey-Shift-m)
+            terminal -e man $(wimenu -s 0) &;;
+
+        # Run program
+        $modkey-Return)
+            terminal &;;
+        $modkey-p)
+            eval exec wmiir setsid "$(proglist $PATH | wimenu -s 0)" &;;
+        $modkey-a)
+            {
+                unset res
+                unset action
+                action=$(proglist $actiondir | wimenu -s 0)
+                [ -n "$action" ] && res="$(${actiondir}/${action})"
+                #echo "action ${action} result: ${res}"
+                [ -n "$res" ] && notify-send "$action" "$res"
+            } &;;
+        XF86Suspend)
+            sudo swapon /dev/sda10
+            sudo pm-hibernate;;
+        XF86Battery)
+            wmiir xwrite /event Notice $(batt);;
+        # Volume control
+#       XF86AudioRaiseVolume)
+#           vol;;
+#       XF86AudioLowerVolume)
+#           vol;;
+        XF86AudioMicMute|XF86Launch2|XF86AudioMute)
+            amixer set Capture toggle >&-;;
+        # MPD control
+        XF86AudioNext)
+            mpc -q next;;
+        XF86AudioPrev)
+            mpc -q prev;;
+#       XF86AudioPlay)
+#           mpc -q toggle;;
+        XF86AudioStop)
+            mpc -q stop;;
+        # Browser
+        XF86HomePage|XF86Launch1)
+            firefox > /dev/null 2>&1 &
+            wmiir xwrite /ctl view web;;
+        XF86Mail)
+            ${actiondir}/mail;;
+        # Touchpad switcher
+        XF86TouchpadToggle)
+            ~/.local/bin/switch_touch_pad;;
+        XF86WLAN)
+            ~/.bin/switch_wifi;;
+        XF86ScreenSaver)
+            "${actiondir}/lock";;
+        XF86Display)
+            ~/.local/bin/switch_display toggle;;
+        XF86MonBrightnessDown)
+            "${actiondir}/backlight_down" ;;
+        XF86MonBrightnessUp)
+            "${actiondir}/backlight_up" ;;
+        Print)
+            "${actiondir}/screenshot";;
+        $alt-Print)
+            ${actiondir}/screenshot -s;;
+
+        # Select view
+        $modkey-t)
+            # Prompt the user for a tag
+            tag=$(wmiir ls /tag | sed 's,/,,; /^sel$/d' | wimenu -s 0)
+            # Write it to the filesystem.
+            wmiir xwrite /ctl view $tag;;
+        $modkey-[0-9])
+#           wmiir xwrite /ctl view ${1##*-};;
+            tag=$(wmiir ls /tag | grep -v sel/ | tail -n +${1##*-} | head -n 1 | sed 's:/::')
+            #tag=$(wmiir ls /tag |
+            #awk -v num=$1 '{if ($0=="sel/") num=num+1} NR==num {sub("/$",""); print}')
+            wmiir xwrite /ctl view $tag;;
+        $modkey-comma)
+            wmiir xwrite /ctl view "$(read_tags | tac | next_tag)";;
+        $modkey-period)
+            wmiir xwrite /ctl view "$(read_tags | next_tag)";;
+
+        # Tag client
+        $modkey-Shift-t)
+            # Prompt the user for new tags
+            tag=$(wmiir ls /tag | sed 's,/,,; /^sel$/d' | wimenu -s 0)
+            # Write them to the client
+            [ -z "$tag" ] || wmiir xwrite /client/sel/tags $tag;;
+        $modkey-Shift-[0-9])
+#           wmiir xwrite /client/sel/tags ${1##*-};;
+            tag=$(wmiir ls /tag | grep -v sel/ | tail -n +${1##*-} | head -n 1 | sed 's/\///')
+            wmiir xwrite /client/sel/tags $tag;;
+        esac;;
+
+    # Client menu
+    ClientMouseDown)        # ClientMouseDown <Client ID> <Button>
+        case $2 in
+        3)
+            clickmenu \
+            "Delete:wmiir xwrite /client/$1/ctl kill" \
+            "Remove:wmiir xwrite /client/$1/tags -$(wmiir read /tag/sel/ctl | head -n 1)" \
+            "Kill:wmiir xwrite /client/$1/ctl slay";;
+        4)
+            wmiir xwrite /tag/sel/ctl select up;;
+        5)
+            wmiir xwrite /tag/sel/ctl select down;;
+        esac;;
+
+    # Tag events
+    LeftBarMouseDown)       # LeftBarMouseDown <Button> <Bar Name>
+        wmiir xwrite /ctl view $2;;
+
+    # Widget events
+    RightBarMouseDown)      # RightBarMouseDown <Button> <Bar Name>
+        case $2 in      # Which widget
+
+        mpd)
+            case $1 in
+            1)
+                mpc -q toggle;;
+            2)
+                ${actiondir}/mpc;;
+            3)
+               clickmenu \
+               "ncmpcpp:${actiondir}/ncmpcpp" \
+               "shuffle:mpc_crossfade.sh";;
+            4)
+                mpc -q prev;;
+            5)
+                mpc -q next;;
+            esac;;
+        vol)
+            case $1 in  # Which mouse button
+            1)      # Left button
+                vol_toggle;;
+            3)      # Right button
+                clickmenu \
+                "pulsemixer:${actiondir}/pulsemixer" \
+                "pavucontrol:pavucontrol&" \
+                "alsamixer:${actiondir}/alsamixer" ;;
+            4)      # Scroll up
+                volup;;
+            5)      # Scroll down
+                voldown;;
+            esac;;
+
+        mail)
+            ${actiondir}/mail;;
+
+        zbatt)
+            wmiir xwrite /event Notice $(batt);;
+
+        zclock)
+            calendar;;
+        esac;;
+    esac
+done

@@ -1,0 +1,11 @@
+NAME='iwctl'
+CMD="$NAME station wlan0 scan"
+
+status() {
+  return 1
+}
+
+if ! pgrep -U $USER $NAME > /dev/null; then
+    urxvtc -T $NAME -e sh -c "$NAME" &
+fi
+wmiir xwrite /ctl view $NAME

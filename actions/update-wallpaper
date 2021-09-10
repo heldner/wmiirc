@@ -1,0 +1,82 @@
+#!/bin/bash
+
+PATH=/bin:/usr/bin:${HOME}/.bin
+export DISPLAY=:0.0
+
+weight=`xrandr | awk -F'[ |x|+]' '/\sconnected/ {print $4; exit}'`
+height=`xrandr | awk -F'[ |x|+]' '/\sconnected/ {print $5; exit}'`
+lock="/var/tmp/$(basename $0).lock"
+
+default_bg(){
+    wallpaper_dir="${HOME}/Pictures/backgrounds"
+    feh -z --no-fehbg --bg-max $wallpaper_dir 2>&-
+}
+
+generate_wall(){
+    local bg_file=/tmp/maze.png
+    mazepng -w $weight -h $height -p 1 -b 2 -n ${bg_file}
+    feh -q --bg-center --no-fehbg ${bg_file} 2>&-
+}
+
+local_curl() {
+    url=$1
+    out=$2
+    curl "$url" \
+        --silent \
+        --location \
+        --output "$out" \
+        --retry 2 \
+        --retry-delay 4 \
+        --max-time 4
+}
+
+national_geo(){
+    # National Geographic POD
+    baseurl="http://photography.nationalgeographic.com"
+    match_url="${baseurl}/u/"
+    tmp_file=`mktemp`
+    image_home="${HOME}/pictures/backgrounds/national_geographic"
+    [ ! -d "$image_home" ] && mkdir "$image_home"
+    local_curl \
+        "${baseurl}/photography/photo-of-the-day/" \
+        ${tmp_file}
+    #return
+    img_name=`grep -m1 "${match_url}" $tmp_file \
+        | sed 's,.*/u/\(.*\)/".*,\1,'`
+    img_path="${image_home}/${img_name}"
+    img_location="${match_url}/${img_name}"
+    if [ ! -f "${img_path}" ]; then
+        local_curl \
+            "${baseurl}/u/${img_name}" \
+            "${img_path}"
+    fi
+    rm -rf "$tmp_file"
+    feh --no-fehbg --bg-max "$img_path" 2>&-
+    RES=$?
+    if [ "$RES" != "0" ]; then
+        default_bg
+    fi
+}
+
+set_bg(){
+    random=${RANDOM:1:2}
+   #if [ "$random" -lt 30 ]; then
+   #    national_geo
+   #elif [ "$random" -ge 30 -a "$random" -lt 60 ];then
+   #if [ "$random" -ge 50 ];then
+   #    generate_wall
+   #else
+        default_bg
+   #fi
+}
+
+#flock -w 10 -n 9 || exit 1
+set -e
+(
+flock -w 10 9
+set_bg
+) 9>$lock
+
+rm -f $lock
+
+exit

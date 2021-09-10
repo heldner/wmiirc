@@ -1,0 +1,7 @@
+#!/bin/sh
+
+wmiir xwrite /ctl view news 
+if ! pgrep -u $USER -f "^newsbeuter" > /dev/null; then
+    urxvtc -T newsbeuter -tn rxvt-unicode-256color -e "newsbeuter"
+fi
+
