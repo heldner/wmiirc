@@ -61,9 +61,6 @@ BATTERY_PATH=/sys/devices/platform/smapi/BAT0
 WMII_NORMCOLORS=$normcolors
 WMII_FOCUSCOLORS=$focuscolors
 
-# used by mpc
-export MPD_HOST="/run/user/1000/mpd.socket"
-
 # Create initial view
 echo "colors $focuscolors\nlabel $startview" \
     | wmiir create /lbar/$startview
