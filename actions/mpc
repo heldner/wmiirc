@@ -1,5 +1,6 @@
 #!/bin/sh
 
+action="$1"
 mpc="/usr/bin/mpc "
 notify_icon=/tmp/music_icon.png
 track_path="$(mpc -f '%file%' \
@@ -22,6 +23,10 @@ get_music_pic () {
         convert "$music_picture" -scale 256x256 "$notify_icon"
     fi
 }
+
+if [ -n "$action" ]; then
+    exec $mpc $action
+fi
 
 if ! echo "$track_path" | grep -q 'http:'; then
     get_music_pic

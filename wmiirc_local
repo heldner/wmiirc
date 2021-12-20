@@ -56,13 +56,14 @@ font='xft:URW Gothic L:size=11'
 actiondir="${HOME}/.wmii/actions"
 startview=msg
 maildir=${HOME}/Mail/
-#BATTERY_PATH=/sys/class/power_supply/BAT0
 BATTERY_PATH=/sys/devices/platform/smapi/BAT0
-WMII_NORMCOLORS=$normcolors
-WMII_FOCUSCOLORS=$focuscolors
+WMII_NORMCOLORS="$normcolors"
+WMII_FOCUSCOLORS="$focuscolors"
+
+export WMII_NORMCOLORS WMII_FOCUSCOLORS
 
 # Create initial view
-echo "colors $focuscolors\nlabel $startview" \
+printf "colors $focuscolors\nlabel $startview\n" \
     | wmiir create /lbar/$startview
 wmiir xwrite /ctl view $startview
 
@@ -162,7 +163,7 @@ batt() {
 }
 
 while true; do
-    if ls "$BATTERY_PATH" > /dev/null 2>&1 ; then
+    if [ -d "$BATTERY_PATH" ]; then
         echo label $(cat /sys/class/power_supply/BAT0/capacity) \
             | wmiir create /rbar/zbatt
     else
@@ -171,10 +172,12 @@ while true; do
     sleep 60
 done &
 
-## MPD
-echo label | wmiir create /rbar/mpd
-pkill -f ".*\.wmii/mpd_update"
-${HOME}/.wmii/mpd_update &
+mpd_bar () {
+    echo label | wmiir create /rbar/mpd
+    pkill -f ".*\.wmii/mpd_update"
+    ${HOME}/.wmii/mpd_update &
+}
+mpd_bar
 
 ## Volume
 vol() {
@@ -439,6 +442,7 @@ while read line; do
                 [ -n "$res" ] && notify-send "$action" "$res"
             } &;;
         XF86Suspend)
+            ${actiondir}/lock
             sudo swapon /dev/sda10
             sudo pm-hibernate;;
         XF86Battery)

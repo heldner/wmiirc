@@ -22,9 +22,9 @@ pass_find () {
 }
 
 if [ -n "$PASS" ]; then \
-  key="$PASS"
+    key="$PASS"
 else
-  key=$(pass_find | dmenu)
+    key=$(pass_find | dmenu)
 fi
 
 if res=$(pass -c "$key" 2>&1); then

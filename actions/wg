@@ -1,0 +1,18 @@
+#!/bin/sh
+
+VPN_INT_IP="192.168.41.1"
+
+[ -z "$1" ] && echo need to argument action && exit 1
+
+wg_up () {
+    sudo wg-quick "$1" wg0
+}
+
+wg_status () {
+    ping -q -W 1 -c 1 "$VPN_INT_IP"
+}
+
+case $1 in
+  show) wg_status ;;
+  *) wg_up "$1";;
+esac
