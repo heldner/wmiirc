@@ -2,10 +2,6 @@
 
 CMD="$*"
 OPTS='-t '
-#if [ -z "$CMD" ]; then
-#    CMD='tmux'
-#    CMD_DEF='tmux -a'
-#fi
 
 ssh_cmd () {
     if [ -x "$(which autossh)" ]; then
@@ -16,14 +12,8 @@ ssh_cmd () {
 }
 
 host=$(awk '$2 !~ /^\*/ && /^Host/ {sub(/\*$/,""); print $2}' ~/.ssh/config \
-    | wimenu -p host:)
+    | dmenu)
 
 [ -z "$host" ] && exit
 
-#if [ -n "$CMD_DEF" ]; then
-#  if ! urxvtc -title "ssh $host" -e $(ssh_cmd) $OPTS $host $CMD_DEF; then
-#    urxvtc -title "ssh $host" -e $(ssh_cmd) $OPTS $host $CMD;
-#  fi
-#else
-  urxvtc -title "ssh $host" -e $(ssh_cmd) $OPTS $host $CMD
-#fi
+urxvtc -title "ssh $host" -e "$(ssh_cmd)" "$OPTS" "$host" "$CMD"
