@@ -14,7 +14,6 @@ end
 
 def mpd_status
   status = `mpc \
-    --host #{ENV['MPD_HOST']} \
     --format "[[%artist% - ]%title%]|[%file%]"`.split("\n")
   current_play = status[0]
   state = status[1].split(/\[|\]/)[1]

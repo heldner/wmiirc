@@ -16,4 +16,5 @@ host=$(awk '$2 !~ /^\*/ && /^Host/ {sub(/\*$/,""); print $2}' ~/.ssh/config \
 
 [ -z "$host" ] && exit
 
-urxvtc -title "ssh $host" -e "$(ssh_cmd)" "$OPTS" "$host" "$CMD"
+eval urxvtc -e "$(ssh_cmd)" "$OPTS" "$host" "$CMD"
+#eval urxvtc -title "ssh $host" -e "$(ssh_cmd)" "$OPTS" "$host" "$CMD"
